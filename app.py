@@ -35,7 +35,7 @@ def is_valid(value, expected_type):
     return False
 
 def main():
-    st.title("🧪 Validador carga de bases manuales")
+    st.title("🧪 Validador carga de bases manualesCA")
 
     st.markdown("""
     ### ℹ️ Consideraciones importantes:
