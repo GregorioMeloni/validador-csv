@@ -12,6 +12,15 @@ DATA_TYPES = {
     "Email (@)": "email"
 }
 
+CHANNEL_TYPES_VALIDOS = [
+    "EMAIL",
+    "SMS",
+    "APNS",
+    "APNS_SANDBOX",
+    "GCM",
+    "CUSTOM"
+]
+
 def is_valid(value, expected_type):
     if pd.isna(value) or value == "":
         return False
@@ -126,15 +135,23 @@ def main():
             header_parts = [col.strip() for col in header_line.split(separator)]
             header_parts[0] = header_parts[0].lstrip("\ufeff")
 
+            COLUMNAS_OBLIGATORIAS_ENCABEZADO = ["ChannelType", "Address"]
 
-            if header_parts[0] != "User.UserId":
+            faltantes = [
+                col for col in COLUMNAS_OBLIGATORIAS_ENCABEZADO
+                if col not in header_parts
+            ]
+
+            if faltantes:
                 st.error(
                     "❌ El archivo es inválido.\n\n"
-                    "👉 La **primera columna** debe ser obligatoriamente **User.UserId**.\n\n"
-                    f"👉 Se encontró: **{header_parts[0]}**\n\n"
-                    "✅ Solución: asegurá que el archivo tenga como primera columna User.UserId"
+                    "👉 Faltan columnas obligatorias en el encabezado:\n"
+                    f"   {', '.join(faltantes)}\n\n"
+                    "✅ Solución: agregá estas columnas al encabezado del archivo CSV."
                 )
                 st.stop()
+
+        
             if "" in header_parts:
                 st.error("❌ El archivo tiene columnas sin nombre en el encabezado.\n\n"
                         "👉 Esto suele ocurrir cuando hay una coma de más al final del encabezado.\n\n"
@@ -190,7 +207,7 @@ def main():
 
             #columnas_sin_nombre = [col for col in df.columns if "No tiene nombre" in col]
 
-            prefijos_validos = ["User.UserId", "User.UserAttributes.", "Metrics."]
+            prefijos_validos = ["User.UserId", "User.UserAttributes.", "Metrics.", "ChannelType", "Address"]
 
             column_prefix_errors = []
 
@@ -203,6 +220,9 @@ def main():
                         "Los prefijos permitidos son:\n"
                         "- User.UserId\n"
                         "- User.UserAttributes.NombreColumnaCamelCase \n\n"
+                        "- Metrics.NombreColumnaCamelCase \n\n"
+                        "- ChannelType \n\n"
+                        "- Address \n\n"
                         f"Columnas inválidas: {', '.join(column_prefix_errors)}")
                 error_critico = True
 
@@ -222,7 +242,7 @@ def main():
         column_types = {}
         column_required = {}
         #columnas_sin_nombre = [col for col in df.columns if col.strip() == "" or "sin nombre" in col.lower() or "no tiene nombre" in col.lower()]
-
+        COLUMNAS_OBLIGATORIAS_POR_FILA = ["Address"]
         for col in df.columns:
             col_container = st.container()
             with col_container:
@@ -230,14 +250,39 @@ def main():
 
                 if col == "User.UserId":
                     selected_type = "Entero"
-                    is_required = True
+                    is_required = False
                     col1.markdown("Tipo de dato para 'User.UserId': **Entero**")
+                    col2.markdown("Obligatorio: ✅")
+                elif col == "ChannelType":
+                    selected_type = "Texto"
+                    is_required = True
+                    col1.markdown(
+                        "Tipo de dato para 'ChannelType': **Texto**  \n"
+                        "Valores permitidos: EMAIL, SMS, APNS, APNS_SANDBOX, GCM, CUSTOM"
+                    )
+                    col2.markdown("Obligatorio: ✅")
+                elif col in COLUMNAS_OBLIGATORIAS_POR_FILA:
+                    with col1:
+                        selected_type = st.selectbox(
+                            f"Tipo de dato para '{col}':",
+                            list(DATA_TYPES.keys()),
+                            key=f"type_{col}"
+                        )
+                    is_required = True
                     col2.markdown("Obligatorio: ✅")
                 else:
                     with col1:
-                        selected_type = st.selectbox(f"Tipo de dato para '{col}':", list(DATA_TYPES.keys()), key=f"type_{col}")
+                        selected_type = st.selectbox(
+                            f"Tipo de dato para '{col}':",
+                            list(DATA_TYPES.keys()),
+                            key=f"type_{col}"
+                        )
                     with col2:
-                        is_required = st.checkbox("¿Es Obligatorio el campo?", value=True, key=f"required_{col}")
+                        is_required = st.checkbox(
+                            "¿Es Obligatorio el campo?",
+                            value=False,
+                            key=f"required_{col}"
+                        )
 
                 column_types[col] = DATA_TYPES[selected_type]
                 column_required[col] = is_required
@@ -252,7 +297,25 @@ def main():
                     for col, expected_type in column_types.items():
                         value = row[col] if col in row else None
                         required = column_required.get(col, True)
-
+                        if col == "ChannelType":
+                            if pd.isna(value) or str(value).strip() == "":
+                                errors.append({
+                                    "Fila": idx + 2,
+                                    "Columna": col,
+                                    "Valor": value,
+                                    "Error": "Campo obligatorio vacío"
+                                })
+                            elif str(value).strip().upper() not in CHANNEL_TYPES_VALIDOS:
+                                errors.append({
+                                    "Fila": idx + 2,
+                                    "Columna": col,
+                                    "Valor": value,
+                                    "Error": (
+                                        "Valor inválido. Permitidos: "
+                                        "EMAIL, SMS, APNS, APNS_SANDBOX, GCM, CUSTOM"
+                                    )
+                                })
+                            continue
                         if required and (pd.isna(value) or str(value).strip() == ""):
                             errors.append({
                                 "Fila": idx + 2,
