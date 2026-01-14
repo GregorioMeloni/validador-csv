@@ -44,7 +44,7 @@ def is_valid(value, expected_type):
     return False
 
 def main():
-    st.title("🧪 Validador carga de bases manuales")
+    st.title("🔍 Validador carga de bases manuales")
 
     st.markdown("""
     ### ℹ️ Consideraciones importantes:
@@ -168,7 +168,12 @@ def main():
                     "✅ Solución: agregá estas columnas al encabezado del archivo CSV."
                 )
                 st.stop()
-
+            if proyecto == "SPV_Marketing":
+                if "User.UserId" not in header_parts:
+                    st.error(
+                        "❌ El proyecto SPV_Marketing requiere obligatoriamente la columna 'User.UserId'."
+                    )
+                    st.stop()
         
             if "" in header_parts:
                 st.error("❌ El archivo tiene columnas sin nombre en el encabezado.\n\n"
@@ -202,7 +207,7 @@ def main():
                     f"👉 Error en fila: {', '.join(map(str, filas_con_sobrantes))}\n\n"
                     "✅ Solución: \n\n"
                     "👉 Caso 1: eliminar la coma sobrante de la fila indicada \n\n"
-                    "👉 Caso 2: Reconsiderar como tratarlo debido a que Pinpoint no lo acepta"
+                    "👉 Caso 2: Reconsiderar como tratarlo debido a que Pinpoint no lo acepta. "
                 )
                 #st.warning(
                 #    "⚠ Podés continuar bajo tu responsabilidad. "
@@ -282,9 +287,12 @@ def main():
 
                 if col == "User.UserId":
                     selected_type = "Entero"
-                    is_required = False
+                    is_required = proyecto == "SPV_Marketing"
                     col1.markdown("Tipo de dato para 'User.UserId': **Entero**")
-                    col2.markdown("Obligatorio: ✅")
+                    if proyecto == "SPV_Marketing":
+                        col2.markdown("Obligatorio: ✅")
+                    else:
+                        col2.markdown("Obligatorio: ❌ ")
                 elif col == "ChannelType":
                     selected_type = "Texto"
                     is_required = proyecto == "Prospectos"
@@ -355,6 +363,7 @@ def main():
                                     "Error": "User.UserId debe ser un número entero"
                                 })
                                 continue
+                            continue
                         if col == "ChannelType" and proyecto == "Prospectos":
                             if pd.isna(value) or str(value).strip() == "":
                                 errors.append({
