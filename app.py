@@ -33,7 +33,7 @@ def is_valid(value, expected_type):
             float(value)
             return True
         elif expected_type == "bool":
-            return str(value).strip().lower() in ['true', 'false', 'sí', 'no']
+            return str(value).strip().lower() in ['true', 'false']
         elif expected_type == "date":
             datetime.datetime.strptime(str(value), "%Y-%m-%d")
             return True
@@ -55,14 +55,32 @@ def main():
     - Los emails pueden pertenecer a cualquier dominio
     - Las fechas deben tener el formato **AAAA-MM-DD**
     - Seleccioná el tipo de dato esperado por cada columna antes de validar
-    - Si en una columna es obligatorio que exista dato, es decir no sea nulo, marcala como tal para que se detecten celdas vacías.
+    - Si en una columna es obligatorio que exista dato, es decir no sea nulo, marcala como tal para que se detecten campos vacíos.
+    - El proyecto destino "Prospectos" exige las columnas ChannelType y Address, para "SPV_Marketing" no es obligatorio.
     """)
-
+    if "ignorar_sobrantes" not in st.session_state:
+        st.session_state.ignorar_sobrantes = False
     uploaded_file = st.file_uploader("📂 Subí tu archivo CSV", type="csv")
 
     if uploaded_file is not None:
         error_critico = False
         separator = ","
+
+        st.subheader("📌 Proyecto destino")
+
+        proyecto = st.selectbox(
+            "Seleccioná el proyecto al cual se va a importar la base:",
+            ["Prospectos", "SPV_Marketing"]
+        )
+
+        st.info(f"Proyecto seleccionado: **{proyecto}**")
+
+        if proyecto == "Prospectos":
+            COLUMNAS_OBLIGATORIAS_ENCABEZADO = ["ChannelType", "Address"]
+            COLUMNAS_OBLIGATORIAS_POR_FILA = ["ChannelType"]
+        else:  # SPV_Marketing
+            COLUMNAS_OBLIGATORIAS_ENCABEZADO = []
+            COLUMNAS_OBLIGATORIAS_POR_FILA = []
 
         try:
             raw = uploaded_file.getvalue()
@@ -135,7 +153,7 @@ def main():
             header_parts = [col.strip() for col in header_line.split(separator)]
             header_parts[0] = header_parts[0].lstrip("\ufeff")
 
-            COLUMNAS_OBLIGATORIAS_ENCABEZADO = ["ChannelType", "Address"]
+            #COLUMNAS_OBLIGATORIAS_ENCABEZADO = ["ChannelType", "Address"]
 
             faltantes = [
                 col for col in COLUMNAS_OBLIGATORIAS_ENCABEZADO
@@ -154,7 +172,7 @@ def main():
         
             if "" in header_parts:
                 st.error("❌ El archivo tiene columnas sin nombre en el encabezado.\n\n"
-                        "👉 Esto suele ocurrir cuando hay una coma de más al final del encabezado.\n\n"
+                        "👉 Esto suele ocurrir cuando hay una coma de más en el encabezado.\n\n"
                         "✅ Solución: Borrá la coma sobrante o agregá un nombre de columna.")
                 st.stop()
                 error_critico = True 
@@ -186,6 +204,16 @@ def main():
                     "👉 Caso 1: eliminar la coma sobrante de la fila indicada \n\n"
                     "👉 Caso 2: Reconsiderar como tratarlo debido a que Pinpoint no lo acepta"
                 )
+                #st.warning(
+                #    "⚠ Podés continuar bajo tu responsabilidad. "
+                #    "Los datos podrían quedar desalineados."
+                #)
+
+                #if st.button("⚠ Ignorar error y continuar"):
+                #    st.session_state.ignorar_sobrantes = True
+                #    st.rerun()
+
+                #st.stop()
                 return
 
             if filas_con_faltantes:
@@ -201,7 +229,8 @@ def main():
                 engine="python",
                 keep_default_na=False,
                 header=0,
-                names=header_parts,   # <--- esta es la CLAVE
+                names=header_parts,
+                #on_bad_lines="skip" if st.session_state.ignorar_sobrantes else "error"   # <--- esta es la CLAVE
             )
             df = df.reset_index(drop=True)
 
@@ -212,15 +241,18 @@ def main():
             column_prefix_errors = []
 
             for col in df.columns:
+                if proyecto == "Prospectos":
+                    continue
+
+                # 👉 Para otros proyectos, validar prefijo
                 if not any(col.startswith(prefijo) for prefijo in prefijos_validos):
                     column_prefix_errors.append(col)
 
             if column_prefix_errors:
                 st.error("❌ Algunas columnas no tienen un prefijo válido. "
-                        "Los prefijos permitidos son:\n"
+                        "Los prefijos permitidos (dependiendo del proyecto) son:\n"
                         "- User.UserId\n"
                         "- User.UserAttributes.NombreColumnaCamelCase \n\n"
-                        "- Metrics.NombreColumnaCamelCase \n\n"
                         "- ChannelType \n\n"
                         "- Address \n\n"
                         f"Columnas inválidas: {', '.join(column_prefix_errors)}")
@@ -242,7 +274,7 @@ def main():
         column_types = {}
         column_required = {}
         #columnas_sin_nombre = [col for col in df.columns if col.strip() == "" or "sin nombre" in col.lower() or "no tiene nombre" in col.lower()]
-        COLUMNAS_OBLIGATORIAS_POR_FILA = ["Address"]
+        #COLUMNAS_OBLIGATORIAS_POR_FILA = ["Address"]
         for col in df.columns:
             col_container = st.container()
             with col_container:
@@ -255,12 +287,16 @@ def main():
                     col2.markdown("Obligatorio: ✅")
                 elif col == "ChannelType":
                     selected_type = "Texto"
-                    is_required = True
+                    is_required = proyecto == "Prospectos"
+
                     col1.markdown(
                         "Tipo de dato para 'ChannelType': **Texto**  \n"
                         "Valores permitidos: EMAIL, SMS, APNS, APNS_SANDBOX, GCM, CUSTOM"
                     )
-                    col2.markdown("Obligatorio: ✅")
+
+                    col2.markdown(
+                        "Obligatorio: ✅" if is_required else "Obligatorio: ❌"
+                    )
                 elif col in COLUMNAS_OBLIGATORIAS_POR_FILA:
                     with col1:
                         selected_type = st.selectbox(
@@ -288,7 +324,7 @@ def main():
                 column_required[col] = is_required
 
         st.subheader("🔍 Resultado de la validación:")
-
+        COLUMNAS_ENTERO_SIEMPRE_OBLIGATORIAS = ["User.UserId"]
         if st.button("▶ Validar datos"):
             with st.spinner("⏳ Validando datos, aguarde unos instantes..."):
                 errors = []
@@ -296,8 +332,30 @@ def main():
                 for idx, row in df.iterrows():
                     for col, expected_type in column_types.items():
                         value = row[col] if col in row else None
-                        required = column_required.get(col, True)
-                        if col == "ChannelType":
+                        
+                        required = column_required.get(col, False)
+                        # 🚨 User.UserId: SIEMPRE obligatorio y SIEMPRE entero
+                        if col == "User.UserId":
+                            if pd.isna(value) or str(value).strip() == "":
+                                errors.append({
+                                    "Fila": idx + 2,
+                                    "Columna": col,
+                                    "Valor": value,
+                                    "Error": "User.UserId es obligatorio y no puede estar vacío"
+                                })
+                                continue
+
+                            try:
+                                int(value)
+                            except ValueError:
+                                errors.append({
+                                    "Fila": idx + 2,
+                                    "Columna": col,
+                                    "Valor": value,
+                                    "Error": "User.UserId debe ser un número entero"
+                                })
+                                continue
+                        if col == "ChannelType" and proyecto == "Prospectos":
                             if pd.isna(value) or str(value).strip() == "":
                                 errors.append({
                                     "Fila": idx + 2,
