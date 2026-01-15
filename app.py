@@ -171,7 +171,8 @@ def main():
             if proyecto == "SPV_Marketing":
                 if "User.UserId" not in header_parts:
                     st.error(
-                        "❌ El proyecto SPV_Marketing requiere obligatoriamente la columna 'User.UserId'."
+                        "❌ El proyecto SPV_Marketing requiere obligatoriamente la columna 'User.UserId'. \n\n"
+                        "✅ Solución: agregá esta columna al encabezado del archivo CSV."
                     )
                     st.stop()
         
@@ -260,7 +261,8 @@ def main():
                         "- User.UserAttributes.NombreColumnaCamelCase \n\n"
                         "- ChannelType \n\n"
                         "- Address \n\n"
-                        f"Columnas inválidas: {', '.join(column_prefix_errors)}")
+                        f"Columnas inválidas: {', '.join(column_prefix_errors)} \n\n"
+                        "✅ Solución: agregá un prefijo válido a la columna")
                 error_critico = True
 
             if error_critico:
